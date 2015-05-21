@@ -213,6 +213,14 @@ proc load_32*[T:byte|char|int8|uint8](a, b, c, d: T, endian: Endianness): int32 
     d.int32 + c.int32 shl 8 + b.int32 shl 16 + a.int32 shl 24
 
 
+proc load_64*(s: string, endian: Endianness): int64 {.inline.} =
+  for i in 0..sizeof(int64)-1:
+    result  = result shl 8
+    if endian == littleEndian:
+      result = result or s[8 - i - 1].int64
+    else:
+      result = result or s[i].int64;
+
 proc unpack_byte(vars: var seq[StructNode], ctx: StructContext) =
   for i in 0..ctx.repeat-1:
     vars.add(newStructChar(ctx.buffer[ctx.offset]))
@@ -239,6 +247,15 @@ proc unpack_int(vars: var seq[StructNode], ctx: StructContext, f: char, signed: 
       vars.add(newStructInt(value))
     else:
       vars.add(newStructUInt(value.uint32))
+    ctx.offset += TYPE_LENGTHS[f]
+
+proc unpack_quad(vars: var seq[StructNode], ctx: StructContext, f: char, signed: bool = false) =
+  for i in 0..ctx.repeat-1:
+    var value = load_64(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
+    if signed:
+      vars.add(newStructQuad(value))
+    else:
+      vars.add(newStructUQuad(value.uint64))
     ctx.offset += TYPE_LENGTHS[f]
 
 
@@ -276,14 +293,20 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
       unpack_int(result, context, f)
     of  'I':
       unpack_int(result, context, f, true)
+    of  'q':
+      unpack_quad(result, context, f)
+    of  'Q':
+      unpack_quad(result, context, f, true)
     of '0'..'9':
       parse_repeat(context.repeat, prev, f)
     else:
       raise newException(ValueError, "bad char in struct format")
 
 when isMainModule:
-  var format = "<5b2?hi"
-  let buf ="\x41\x42\x43\x44\x45\x01\x00\x07\x08\x01\x02\x03\x04"
+  var format = "<5b2?h2i"
+  let buf ="\x41\x42\x43\x44\x45\x01\x00\x07\x08\x01\x02\x03\x04\x0D\x00\x00\x00"
   echo unpack(format, buf)
-  format = ">5b2?hi"
+  format = ">5b2?hQ"
+  echo unpack(format, buf)
+  format = "<5b2?hQ"
   echo unpack(format, buf)
