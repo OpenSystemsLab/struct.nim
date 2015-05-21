@@ -206,15 +206,15 @@ proc parse_repeat(ctx: StructContext, repeat: var string) =
 
 proc load_16*(a, b: char, endian: Endianness): int16 {.inline.} =
   if endian == littleEndian:
-    a.int8 + b.int8 shl 8
+    a.int16 + b.int16 shl 8
   else:
-    b.int8 + a.int8 shl 8
+    b.int16 + a.int16 shl 8
 
 proc load_32*(a, b, c, d: char, endian: Endianness): int32 {.inline.} =
   if endian == littleEndian:
-    a.int8 + b.int8 shl 8 + c.int8 shl 16 + d.int8 shl 24
+    a.int32 + b.int32 shl 8 + c.int32 shl 16 + d.int32 shl 24
   else:
-    d.int8 + c.int8 shl 8 + b.int8 shl 16 + a.int8 shl 24
+    d.int32 + c.int32 shl 8 + b.int32 shl 16 + a.int32 shl 24
 
 
 proc unpack_byte(vars: var seq[StructNode], ctx: StructContext) =
@@ -291,6 +291,7 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
 
 when isMainModule:
   var format = "<5b2?hi"
-  var buf ="\x41\x42\x43\x44\x45\x01\x00\x00\x08\x00\x00\x00\x01"
-
+  let buf ="\x41\x42\x43\x44\x45\x01\x00\x07\x08\x01\x02\x03\x04"
+  echo unpack(format, buf)
+  format = ">5b2?hi"
   echo unpack(format, buf)
