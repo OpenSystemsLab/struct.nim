@@ -1,6 +1,4 @@
 import endians
-import macros
-import parseutils
 import strutils
 import tables
 
@@ -164,19 +162,24 @@ proc `$`*( node: StructNode ): string =
   of StructString:
     $node.str
 
+proc parse_repeat(repeat: var int, p, n: char) =
+  if p notin '0'..'9':
+    repeat = 0
+  repeat *= 10
+  repeat += parseInt($n)
+
 proc calcsize(format: string): int =
   result = 0
 
-  var repeat = ""
+  var repeat: int
   for i in 0..format.len-1:
-    let c: char = format[i]
-    if c in '0'..'9':
-      repeat.add($c)
+    if i > 0 and format[i-1] notin '0'..'9':
+      repeat = 1
+
+    if format[i] in '0'..'9':
+      parse_repeat(repeat,  format[i-1],  format[i])
     else:
-      if repeat == "":
-        repeat = "1"
-      result += repeat.parseInt() * TYPE_LENGTHS[c]
-      repeat = ""
+      result += repeat * TYPE_LENGTHS[format[i]]
 
 proc parse_prefix(ctx: StructContext, f: char)  =
   case f
@@ -197,20 +200,13 @@ proc parse_prefix(ctx: StructContext, f: char)  =
     ctx.nativeSize = 1
     ctx.nativeAlignment = 1
 
-proc parse_repeat(ctx: StructContext, repeat: var string) =
-  if repeat == "":
-    ctx.repeat = 1
-  else:
-    ctx.repeat = repeat.parseInt()
-    repeat = ""
-
-proc load_16*(a, b: char, endian: Endianness): int16 {.inline.} =
+proc load_16*[T:byte|char|int8|uint8](a, b: T, endian: Endianness): int16 {.inline.} =
   if endian == littleEndian:
     a.int16 + b.int16 shl 8
   else:
     b.int16 + a.int16 shl 8
 
-proc load_32*(a, b, c, d: char, endian: Endianness): int32 {.inline.} =
+proc load_32*[T:byte|char|int8|uint8](a, b, c, d: T, endian: Endianness): int32 {.inline.} =
   if endian == littleEndian:
     a.int32 + b.int32 shl 8 + c.int32 shl 16 + d.int32 shl 24
   else:
@@ -257,37 +253,33 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
   context.buffer = buf
   var fmt = fmt
 
-  var repeat = ""
-  while fmt.len > 0:
-    var f: char = fmt[0]
+  for i in 0..fmt.len-1:
+    var prev: char
+    if i > 0:
+      prev = fmt[i-1]
+    if prev notin '0'..'9':
+      context.repeat = 1;
+
+    let f: char = fmt[i]
     case f
     of '=', '<', '>', '!', '@':
       context.parse_prefix(f)
     of 'b':
-      context.parse_repeat(repeat)
       unpack_byte(result, context)
     of '?':
-      context.parse_repeat(repeat)
       unpack_bool(result, context)
     of  'h':
-      context.parse_repeat(repeat)
       unpack_short(result, context, f)
     of  'H':
-      context.parse_repeat(repeat)
       unpack_short(result, context, f, true)
     of  'i':
-      context.parse_repeat(repeat)
       unpack_int(result, context, f)
     of  'I':
-      context.parse_repeat(repeat)
       unpack_int(result, context, f, true)
     of '0'..'9':
-      repeat.add($f)
+      parse_repeat(context.repeat, prev, f)
     else:
       raise newException(ValueError, "bad char in struct format")
-
-    fmt.delete(0, 0)
-
 
 when isMainModule:
   var format = "<5b2?hi"
