@@ -212,6 +212,18 @@ proc load_32*[T:byte|char|int8|uint8](a, b, c, d: T, endian: Endianness): int32 
   else:
     d.int32 + c.int32 shl 8 + b.int32 shl 16 + a.int32 shl 24
 
+proc load_32f*[T:byte|char|int8|uint8](a, b, c, d: T, endian: Endianness): float32 {.inline.} =
+    var o = cast[cstring](addr result)
+    if endian == littleEndian:
+      o[0] = a
+      o[1] = b
+      o[2] = c
+      o[3] = d
+    else:
+      o[3] = a
+      o[2] = b
+      o[1] = c
+      o[0] = d
 
 proc load_64*(s: string, endian: Endianness): int64 {.inline.} =
   for i in 0..sizeof(int64)-1:
@@ -220,6 +232,14 @@ proc load_64*(s: string, endian: Endianness): int64 {.inline.} =
       result = result or s[8 - i - 1].int64
     else:
       result = result or s[i].int64;
+
+proc load_64f*(s: string, endian: Endianness): float64 {.inline.} =
+  var o = cast[cstring](addr result)
+  for i in 0..sizeof(float64)-1:
+    if endian == littleEndian:
+      o[i] = s[i]
+    else:
+      o[i] = s[8 - i - 1]
 
 proc unpack_byte(vars: var seq[StructNode], ctx: StructContext) =
   for i in 0..ctx.repeat-1:
@@ -257,6 +277,21 @@ proc unpack_quad(vars: var seq[StructNode], ctx: StructContext, f: char, signed:
     else:
       vars.add(newStructUQuad(value.uint64))
     ctx.offset += TYPE_LENGTHS[f]
+
+
+proc unpack_float(vars: var seq[StructNode], ctx: StructContext) =
+  for i in 0..ctx.repeat-1:
+    var value = load_32f(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.buffer[ctx.offset+2], ctx.buffer[ctx.offset+3], ctx.byteOrder)
+
+    vars.add(newStructFloat(value.float32))
+    ctx.offset += TYPE_LENGTHS['f']
+
+proc unpack_double(vars: var seq[StructNode], ctx: StructContext) =
+  for i in 0..ctx.repeat-1:
+    var value = load_64f(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
+
+    vars.add(newStructDouble(value))
+    ctx.offset += TYPE_LENGTHS['f']
 
 
 proc unpack*(fmt, buf: string): seq[StructNode] =
@@ -297,6 +332,10 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
       unpack_quad(result, context, f)
     of  'Q':
       unpack_quad(result, context, f, true)
+    of  'f':
+      unpack_float(result, context)
+    of  'd':
+      unpack_double(result, context)
     of '0'..'9':
       parse_repeat(context.repeat, prev, f)
     else:
@@ -310,3 +349,6 @@ when isMainModule:
   echo unpack(format, buf)
   format = "<5b2?hQ"
   echo unpack(format, buf)
+  format = ">fd"
+  let buf2 = "\x40\xA6\x66\x66\xCD\xCC\xCC\xCC\xCC\xCC\x14\x40"
+  echo unpack(format, buf2)
