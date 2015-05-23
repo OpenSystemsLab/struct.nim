@@ -57,6 +57,7 @@ const
   VERSION* = "0.1.0"
 
   TYPE_LENGTHS = {
+    'x': sizeof(char),
     'b': sizeof(char),
     'h': sizeof(int16),
     'H': sizeof(uint16),
@@ -68,7 +69,7 @@ const
     'Q': sizeof(uint64),
     'f': sizeof(float32),
     'd': sizeof(float64),
-    's': sizeof(int32),
+    's': sizeof(char),
     '?': sizeof(bool)
   }.toTable
 
@@ -162,24 +163,19 @@ proc `$`*( node: StructNode ): string =
   of StructString:
     $node.str
 
-proc parse_repeat(repeat: var int, p, n: char) =
-  if p notin '0'..'9':
-    repeat = 0
-  repeat *= 10
-  repeat += parseInt($n)
-
 proc calcsize(format: string): int =
-  result = 0
-
-  var repeat: int
+  var repeat = ""
   for i in 0..format.len-1:
-    if i > 0 and format[i-1] notin '0'..'9':
-      repeat = 1
-
-    if format[i] in '0'..'9':
-      parse_repeat(repeat,  format[i-1],  format[i])
+    let f: char = format[i]
+    if f in '0'..'9':
+      repeat.add($f)
     else:
-      result += repeat * TYPE_LENGTHS[format[i]]
+      if repeat == "":
+        result += TYPE_LENGTHS[f]
+      else:
+        result += parseInt(repeat) * TYPE_LENGTHS[f]
+      repeat = ""
+
 
 proc parse_prefix(ctx: StructContext, f: char)  =
   case f
@@ -293,6 +289,14 @@ proc unpack_double(vars: var seq[StructNode], ctx: StructContext) =
     vars.add(newStructDouble(value))
     ctx.offset += TYPE_LENGTHS['f']
 
+proc unpack_string(vars: var seq[StructNode], ctx: StructContext) =
+  var value: string
+  if ctx.repeat == 1:
+    value = $ctx.buffer[ctx.offset]
+  else:
+    value = ctx.buffer[ctx.offset..ctx.offset+ctx.repeat-1]
+  vars.add(newStructString(value))
+  ctx.offset += ctx.repeat
 
 proc unpack*(fmt, buf: string): seq[StructNode] =
   result = @[]
@@ -305,14 +309,20 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
   context.buffer = buf
   var fmt = fmt
 
+  var repeat = ""
   for i in 0..fmt.len-1:
-    var prev: char
-    if i > 0:
-      prev = fmt[i-1]
-    if prev notin '0'..'9':
-      context.repeat = 1;
-
     let f: char = fmt[i]
+
+    if f in '0'..'9':
+      repeat.add($f)
+      continue
+    else:
+      if repeat == "":
+        context.repeat = 1
+      else:
+        context.repeat = parseInt(repeat)
+        repeat = ""
+
     case f
     of '=', '<', '>', '!', '@':
       context.parse_prefix(f)
@@ -336,19 +346,28 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
       unpack_float(result, context)
     of  'd':
       unpack_double(result, context)
-    of '0'..'9':
-      parse_repeat(context.repeat, prev, f)
+    of 's':
+      unpack_string(result, context)
+    of 'x':
+      context.offset += context.repeat * TYPE_LENGTHS[f]
     else:
       raise newException(ValueError, "bad char in struct format")
 
 when isMainModule:
-  var format = "<5b2?h2i"
   let buf ="\x41\x42\x43\x44\x45\x01\x00\x07\x08\x01\x02\x03\x04\x0D\x00\x00\x00"
-  echo unpack(format, buf)
-  format = ">5b2?hQ"
-  echo unpack(format, buf)
-  format = "<5b2?hQ"
-  echo unpack(format, buf)
-  format = ">fd"
+  let result1 = unpack("<5b2?h2i", buf)
+  assert result1.len == 10
+  echo result1
+  let result2 =  unpack(">5b2?hQ", buf)
+  assert result2.len == 9
+  echo result2
+  echo unpack("<5b2?hQ", buf)
+
   let buf2 = "\x40\xA6\x66\x66\xCD\xCC\xCC\xCC\xCC\xCC\x14\x40"
-  echo unpack(format, buf2)
+  let result3 = unpack(">fd", buf2)
+  assert result3.len == 2
+  echo result3
+  let buf3 = "Viet Nam"
+  let result4 = unpack("4sx3s", buf3)
+  assert result4.len == 2
+  echo result4
