@@ -163,6 +163,50 @@ proc `$`*( node: StructNode ): string =
   of StructString:
     $node.str
 
+proc getChar*(node: StructNode): char =
+  assert node.kind == StructChar
+  result = node.chr
+
+proc getBool*(node: StructNode): bool =
+  assert node.kind == StructBool
+  result = node.bval
+
+proc getShort*(node: StructNode): int16 =
+  assert node.kind == StructShort
+  result = node.sval
+
+proc getUShort*(node: StructNode): uint16 =
+  assert node.kind == StructUShort
+  result = node.usval
+
+proc getInt*(node: StructNode): int32 =
+  assert node.kind == StructInt
+  result = node.ival
+
+proc getUInt*(node: StructNode): uint32 =
+  assert node.kind == StructUInt
+  result = node.uival
+
+proc getQuad*(node: StructNode): int64 =
+  assert node.kind == StructQuad
+  result = node.qval
+
+proc getUQuad*(node: StructNode): uint64 =
+  assert node.kind == StructUQuad
+  result = node.uqval
+
+proc getFloat*(node: StructNode): float32 =
+  assert node.kind == StructFloat
+  result = node.fval
+
+proc getDouble*(node: StructNode): float64 =
+  assert node.kind == StructDouble
+  result = node.dval
+
+proc getString*(node: StructNode): string =
+  assert node.kind == StructString
+  return node.str
+
 proc calcsize(format: string): int =
   var repeat = ""
   for i in 0..format.len-1:
@@ -175,7 +219,6 @@ proc calcsize(format: string): int =
       else:
         result += parseInt(repeat) * TYPE_LENGTHS[f]
       repeat = ""
-
 
 proc parse_prefix(ctx: StructContext, f: char)  =
   case f
@@ -357,6 +400,8 @@ when isMainModule:
   let buf ="\x41\x42\x43\x44\x45\x01\x00\x07\x08\x01\x02\x03\x04\x0D\x00\x00\x00"
   let result1 = unpack("<5b2?h2i", buf)
   assert result1.len == 10
+  assert result1[5].getBool == true
+  assert result1[6].getBool == false
   echo result1
   let result2 =  unpack(">5b2?hQ", buf)
   assert result2.len == 9
@@ -370,4 +415,6 @@ when isMainModule:
   let buf3 = "Viet Nam"
   let result4 = unpack("4sx3s", buf3)
   assert result4.len == 2
+  assert result4[0].getString == "Viet"
+  assert result4[1].getString == "Nam"
   echo result4
