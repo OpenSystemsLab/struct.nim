@@ -1,5 +1,7 @@
 # struct.nim
-** Python-like '[struct](http://docs.python.org/2/library/struct.html)' for Nim**
+**Python-like '[struct](http://docs.python.org/2/library/struct.html)' for Nim**
+
+*This library is still under development, use it as yourown risk!*
 
 Format String
 ======
