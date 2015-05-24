@@ -51,8 +51,6 @@ type
 
   StructContext = ref object of RootObj
     byteOrder: Endianness
-    nativeAlignment: int
-    nativeSize: int
     buffer: string
     offset: int
     repeat: int
@@ -67,9 +65,7 @@ const
     'h': sizeof(int16),
     'H': sizeof(uint16),
     'i': sizeof(int32),
-    'l': sizeof(int32),
     'I': sizeof(uint32),
-    'L': sizeof(uint32),
     'q': sizeof(int64),
     'Q': sizeof(uint64),
     'f': sizeof(float32),
@@ -137,8 +133,6 @@ proc newStructString*(s: string): StructNode =
 proc newStructContext(): StructContext =
   new(result)
   result.byteOrder = system.cpuEndian
-  result.nativeSize = 1
-  result.nativeAlignment = 1
   result.offset = 0
   result.repeat = 1
 
@@ -229,20 +223,12 @@ proc parse_prefix(ctx: StructContext, f: char)  =
   case f
   of '=':
     ctx.byteOrder = system.cpuEndian
-    ctx.nativeSize = 0
-    ctx.nativeAlignment = 0
   of '<':
     ctx.byteOrder = littleEndian
-    ctx.nativeSize = 0
-    ctx.nativeAlignment = 0
   of '>', '!':
     ctx.byteOrder = bigEndian
-    ctx.nativeSize = 0
-    ctx.nativeAlignment = 0
   else:
     ctx.byteOrder = system.cpuEndian
-    ctx.nativeSize = 1
-    ctx.nativeAlignment = 1
 
 proc load_16*[T:byte|char|int8|uint8](a, b: T, endian: Endianness): int16 {.inline.} =
   if endian == littleEndian:
@@ -328,7 +314,7 @@ proc unpack_bool(vars: var seq[StructNode], ctx: StructContext) =
 proc unpack_short(vars: var seq[StructNode], ctx: StructContext, f: char, signed: bool = false) =
   for i in 0..ctx.repeat-1:
     var value = load_16(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.byteOrder)
-    if signed:
+    if not signed:
       vars.add(newStructShort(value))
     else:
       vars.add(newStructUShort(value.uint16))
@@ -337,7 +323,7 @@ proc unpack_short(vars: var seq[StructNode], ctx: StructContext, f: char, signed
 proc unpack_int(vars: var seq[StructNode], ctx: StructContext, f: char, signed: bool = false) =
   for i in 0..ctx.repeat-1:
     var value = load_32(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.buffer[ctx.offset+2], ctx.buffer[ctx.offset+3], ctx.byteOrder)
-    if signed:
+    if not signed:
       vars.add(newStructInt(value))
     else:
       vars.add(newStructUInt(value.uint32))
@@ -346,7 +332,7 @@ proc unpack_int(vars: var seq[StructNode], ctx: StructContext, f: char, signed: 
 proc unpack_quad(vars: var seq[StructNode], ctx: StructContext, f: char, signed: bool = false) =
   for i in 0..ctx.repeat-1:
     var value = load_64(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
-    if signed:
+    if not signed:
       vars.add(newStructQuad(value))
     else:
       vars.add(newStructUQuad(value.uint64))
@@ -544,52 +530,52 @@ proc pack*(fmt: string, vars: varargs[StructNode]): string =
       raise newException(ValueError, "bad char in struct format")
 
 
-proc newStruct(fmt: string): Struct =
+proc newStruct*(fmt: string): Struct =
   new(result)
   result.fmt = fmt
   result.vars = @[]
 
-proc add(s: Struct, c: char): Struct =
+proc add*(s: Struct, c: char): Struct =
   result = s
   s.vars.add(newStructChar(c))
 
-proc add(s: Struct, b: bool): Struct =
+proc add*(s: Struct, b: bool): Struct =
   result = s
   s.vars.add(newStructBool(b))
 
-proc add(s: Struct, i: int16): Struct =
+proc add*(s: Struct, i: int16): Struct =
   result = s
   s.vars.add(newStructShort(i))
 
-proc add(s: Struct, i: uint16): Struct =
+proc add*(s: Struct, i: uint16): Struct =
   result = s
   s.vars.add(newStructUShort(i))
 
-proc add(s: Struct, i: int32): Struct =
+proc add*(s: Struct, i: int32): Struct =
   result = s
   s.vars.add(newStructInt(i))
 
-proc add(s: Struct, i: uint32): Struct =
+proc add*(s: Struct, i: uint32): Struct =
   result = s
   s.vars.add(newStructUint(i))
 
-proc add(s: Struct, i: int64): Struct =
+proc add*(s: Struct, i: int64): Struct =
   result = s
   s.vars.add(newStructQuad(i))
 
-proc add(s: Struct, i: uint64): Struct =
+proc add*(s: Struct, i: uint64): Struct =
   result = s
   s.vars.add(newStructUQuad(i))
 
-proc add(s: Struct, f: float32): Struct =
+proc add*(s: Struct, f: float32): Struct =
   result = s
   s.vars.add(newStructFloat(f))
 
-proc add(s: Struct, d: float64): Struct =
+proc add*(s: Struct, d: float64): Struct =
   result = s
   s.vars.add(newStructDouble(d))
 
-proc add(s: Struct, str: string): Struct =
+proc add*(s: Struct, str: string): Struct =
   result = s
   s.vars.add(newStructString(str))
 
