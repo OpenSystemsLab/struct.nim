@@ -1,3 +1,13 @@
+#
+#          Nim's Unofficial Library
+#        (c) Copyright 2015 Huy Doan
+#
+#    See the file "LICENSE", included in this
+#    distribution, for details about the copyright.
+#
+
+## This module implements Python struct for Nim
+
 import strutils
 import tables
 
