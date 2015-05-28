@@ -359,7 +359,7 @@ proc unpack_double(vars: var seq[StructNode], ctx: StructContext) =
     var value = load_64f(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
 
     vars.add(newStructDouble(value))
-    ctx.offset += TYPE_LENGTHS['f']
+    ctx.offset += TYPE_LENGTHS['d']
 
 proc unpack_string(vars: var seq[StructNode], ctx: StructContext) =
   var value: string
