@@ -1,4 +1,3 @@
-import endians
 import strutils
 import tables
 
@@ -207,7 +206,7 @@ proc getString*(node: StructNode): string =
   return node.str
 
 proc calcsize(format: string): int =
-  var repeat = ""
+  var repeat = newString(0)
   for i in 0..format.len-1:
     let f: char = format[i]
     if f in '0'..'9':
@@ -368,7 +367,7 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
 
   let size = calcsize(fmt)
   if buf.len < size:
-    raise newException(ValueError, "unpack requires a string argument of length " & $size)
+    raise newException(ValueError, "unpack requires a string argument of length " & $size & ", input: " & $buf.len)
 
   var context = newStructContext()
   context.buffer = buf
@@ -418,83 +417,98 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
       raise newException(ValueError, "bad char in struct format")
 
 proc pack_char(vars: varargs[StructNode], ctx: StructContext): string =
-  result = ""
+  result = newString(ctx.repeat)
   for i in 0..ctx.repeat-1:
     assert vars[ctx.offset].kind == StructChar
-    result &= $vars[ctx.offset].chr
+    result[i] = vars[ctx.offset].chr
     ctx.offset += 1
 
 proc pack_bool(vars: varargs[StructNode], ctx: StructContext): string =
-  result = ""
+  result = newString(ctx.repeat)
   for i in 0..ctx.repeat-1:
     assert vars[ctx.offset].kind == StructBool
     if vars[ctx.offset].bval == true:
-      result &= "\x01"
+      result[0] = '\x01'
     else:
-      result &= "\x00"
+      result[0] = '\x00'
     ctx.offset += 1
 
 proc pack_16(vars: varargs[StructNode], ctx: StructContext): string =
-  result = ""
+  result = newString(2*ctx.repeat)
   for i in 0..ctx.repeat-1:
     case vars[ctx.offset].kind:
     of StructShort:
-      result &= extract_16(vars[ctx.offset].sval, ctx.byteOrder)
+      let value = extract_16(vars[ctx.offset].sval, ctx.byteOrder)
+      result[i] = value[0]
+      result[i+1] = value[1]
     of StructUShort:
-      result &= extract_16(vars[ctx.offset].usval, ctx.byteOrder)
+      let value = extract_16(vars[ctx.offset].usval, ctx.byteOrder)
+      result[i] = value[0]
+      result[i+1] = value[1]
     else:
       raise newException(ValueError, "not supported")
     ctx.offset += 1
 
 
 proc pack_32(vars: varargs[StructNode], ctx: StructContext): string =
-  result = ""
+  result = newString(4*ctx.repeat)
   for i in 0..ctx.repeat-1:
+    var value: string
     case vars[ctx.offset].kind:
     of StructFloat:
-      result &= extract_32(vars[ctx.offset].fval, ctx.byteOrder)
+      value = extract_32(vars[ctx.offset].fval, ctx.byteOrder)
     of StructInt:
-      result &= extract_32(vars[ctx.offset].ival, ctx.byteOrder)
+      value = extract_32(vars[ctx.offset].ival, ctx.byteOrder)
     of StructUInt:
-      result &= extract_32(vars[ctx.offset].uival, ctx.byteOrder)
+      value = extract_32(vars[ctx.offset].uival, ctx.byteOrder)
     else:
       raise newException(ValueError, "not supported")
+
+    for j in 0..3:
+      result[i+j] = value[j]
+
     ctx.offset += 1
 
 proc pack_64(vars: varargs[StructNode], ctx: StructContext): string =
-  result = ""
+  result = newString(8*ctx.repeat)
   for i in 0..ctx.repeat-1:
+    var value: string
     case vars[ctx.offset].kind:
     of StructDouble:
-      result &= extract_64(vars[ctx.offset].dval, ctx.byteOrder)
+      value = extract_64(vars[ctx.offset].dval, ctx.byteOrder)
     of StructQuad:
-      result &= extract_64(vars[ctx.offset].qval, ctx.byteOrder)
+      value = extract_64(vars[ctx.offset].qval, ctx.byteOrder)
     of StructUQuad:
-      result &= extract_64(vars[ctx.offset].uqval, ctx.byteOrder)
+      value= extract_64(vars[ctx.offset].uqval, ctx.byteOrder)
     else:
       raise newException(ValueError, "not supported")
+
+    for j in 0..7:
+      result[i+j] = value[j]
+
     ctx.offset += 1
 
 proc pack_string(vars: varargs[StructNode], ctx: StructContext): string =
-  result = ""
+  result = newString(ctx.repeat)
   assert vars[ctx.offset].kind == StructString
-  result &= vars[ctx.offset].str[0..ctx.repeat-1]
 
-  var pad = ctx.repeat - vars[ctx.offset].str.len
-  if pad > 0:
-    result &= "\x00".repeat(pad)
+  let value = vars[ctx.offset].str
+  for i in 0..value.len-1:
+    result[i] = value[i]
+  if(value.len < ctx.repeat):
+    for i in value.len..ctx.repeat-1:
+      result[i] = '\x00'
 
   ctx.offset += 1
 
 proc pack_pad(ctx: StructContext): string =
-  result = ""
+  result = newString(ctx.repeat)
   for i in 0..ctx.repeat-1:
-    result &= "\x00"
+    result[i] = '\x00'
 
 proc pack*(fmt: string, vars: varargs[StructNode]): string =
   result = ""
   var context = newStructContext()
-
   var repeat = ""
   for i in 0..fmt.len-1:
     let f: char = fmt[i]
@@ -581,40 +595,3 @@ proc add*(s: Struct, str: string): Struct =
 
 proc pack*(s: Struct): string =
   result = pack(s.fmt, s.vars)
-
-
-when isMainModule:
-  let buf ="\x41\x42\x43\x44\x45\x01\x00\x07\x08\x01\x02\x03\x04\x0D\x00\x00\x00"
-  let result1 = unpack("<5b2?h2i", buf)
-  assert result1.len == 10
-  assert result1[5].getBool == true
-  assert result1[6].getBool == false
-  echo result1
-  let result2 =  unpack(">5b2?hQ", buf)
-  assert result2.len == 9
-  echo result2
-  echo unpack("<5b2?hQ", buf)
-
-  let buf2 = "\x40\xA6\x66\x66\xCD\xCC\xCC\xCC\xCC\xCC\x14\x40"
-  let result3 = unpack(">fd", buf2)
-  assert result3.len == 2
-  echo result3
-  let buf3 = "Viet Nam"
-  let result4 = unpack("4sx3s", buf3)
-  assert result4.len == 2
-  assert result4[0].getString == "Viet"
-  assert result4[1].getString == "Nam"
-  echo result4
-
-  #echo pack("<fi?c", newStructFloat(5.2), newStructInt(8), newStructBool(true), newStructChar('a'))
-  var format = "<ffb2?biQdH"
-  var st = newStruct(format)
-  discard st.add(5.2'f32).add(6.4'f32).add('A').add(true).add(false)
-  var out1 =  st.add('a').add(8'i32).add(8589934591).add(10.4'f64).add(32767.int16).pack()
-  echo out1
-  echo unpack(format, out1)
-
-  assert newStruct("h").add(32767.int16).pack() == "\xff\x7f"
-
-  assert newStruct("4s3s").add("Viet").add("Nam").pack() == "VietNam"
-  assert newStruct("6sxxxxx3s").add("Viet").add("Nam").pack().len == 14
