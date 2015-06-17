@@ -1,7 +1,7 @@
 [Package]
 name          = "struct"
-version       = "0.0.2"
-author        = "Huy ☭"
+version       = "0.0.3"
+author        = "Huy Doan"
 description   = "Python-like 'struct' for Nim"
 license       = "MIT"
 

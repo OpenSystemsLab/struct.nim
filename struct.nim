@@ -10,6 +10,7 @@
 
 import strutils
 import tables
+import endians
 
 type
   StructError* = object of OSError
@@ -171,47 +172,47 @@ proc `$`*( node: StructNode ): string =
   of StructString:
     $node.str
 
-proc getChar*(node: StructNode): char =
+proc getChar*(node: StructNode): char {.noSideEffect, procVar.} =
   assert node.kind == StructChar
   result = node.chr
 
-proc getBool*(node: StructNode): bool =
+proc getBool*(node: StructNode): bool {.noSideEffect, procVar.} =
   assert node.kind == StructBool
   result = node.bval
 
-proc getShort*(node: StructNode): int16 =
+proc getShort*(node: StructNode): int16 {.noSideEffect, procVar.} =
   assert node.kind == StructShort
   result = node.sval
 
-proc getUShort*(node: StructNode): uint16 =
+proc getUShort*(node: StructNode): uint16 {.noSideEffect, procVar.} =
   assert node.kind == StructUShort
   result = node.usval
 
-proc getInt*(node: StructNode): int32 =
+proc getInt*(node: StructNode): int32 {.noSideEffect, procVar.} =
   assert node.kind == StructInt
   result = node.ival
 
-proc getUInt*(node: StructNode): uint32 =
+proc getUInt*(node: StructNode): uint32 {.noSideEffect, procVar.} =
   assert node.kind == StructUInt
   result = node.uival
 
-proc getQuad*(node: StructNode): int64 =
+proc getQuad*(node: StructNode): int64 {.noSideEffect, procVar.} =
   assert node.kind == StructQuad
   result = node.qval
 
-proc getUQuad*(node: StructNode): uint64 =
+proc getUQuad*(node: StructNode): uint64 {.noSideEffect, procVar.} =
   assert node.kind == StructUQuad
   result = node.uqval
 
-proc getFloat*(node: StructNode): float32 =
+proc getFloat*(node: StructNode): float32 {.noSideEffect, procVar.} =
   assert node.kind == StructFloat
   result = node.fval
 
-proc getDouble*(node: StructNode): float64 =
+proc getDouble*(node: StructNode): float64 {.noSideEffect, procVar.} =
   assert node.kind == StructDouble
   result = node.dval
 
-proc getString*(node: StructNode): string =
+proc getString*(node: StructNode): string {.noSideEffect, procVar.} =
   assert node.kind == StructString
   return node.str
 
@@ -280,35 +281,26 @@ proc load_64f*(s: string, endian: Endianness): float64 {.inline.} =
     else:
       o[i] = s[8 - i - 1]
 
-proc extract_16*[T:int16|uint16](v: T, endian: Endianness): string {.inline.} =
-  result = ""
+proc extract_16*[T:int16|uint16](v: T, endian: Endianness): array[0..1, char] {.inline.} =
   var v = v
-  var o = cast[cstring](addr v)
-
   if endian == littleEndian:
-    result &= $o[0] & $o[1]
+    littleEndian16(addr result, addr v)
   else:
-    result &= $o[1] & $o[0]
+    bigEndian16(addr result, addr v)
 
-proc extract_32*[T:float32|int32|uint32](v: T, endian: Endianness): string {.inline.} =
-  result = ""
+proc extract_32*[T:float32|int32|uint32](v: T, endian: Endianness): array[0..3, char] {.inline.} =      
   var v = v
-  var o = cast[cstring](addr v)
-  for i in 0..3:
-    if endian == littleEndian:
-      result &= $o[i]
-    else:
-      result &= $o[3 - i]
+  if endian == littleEndian:
+    littleEndian32(addr result, addr v)
+  else:
+    bigEndian32(addr result, addr v)
 
-proc extract_64*[T:float64|int64|uint64](v: T, endian: Endianness): string {.inline.} =
-  result = ""
+proc extract_64*[T:float64|int64|uint64](v: T, endian: Endianness): array[0..7, char] {.inline.} =
   var v = v
-  var o = cast[cstring](addr v)
-  for i in 0..7:
-    if endian == littleEndian:
-      result &= $o[i]
-    else:
-      result &= $o[7 - i]
+  if endian == littleEndian:
+    littleEndian64(addr result, addr v)
+  else:
+    bigEndian64(addr result, addr v)
 
 proc unpack_char(vars: var seq[StructNode], ctx: StructContext) =
   for i in 0..ctx.repeat-1:
@@ -463,7 +455,7 @@ proc pack_16(vars: varargs[StructNode], ctx: StructContext): string =
 proc pack_32(vars: varargs[StructNode], ctx: StructContext): string =
   result = newString(4*ctx.repeat)
   for i in 0..ctx.repeat-1:
-    var value: string
+    var value: array[0..3, char]
     case vars[ctx.offset].kind:
     of StructFloat:
       value = extract_32(vars[ctx.offset].fval, ctx.byteOrder)
@@ -482,7 +474,7 @@ proc pack_32(vars: varargs[StructNode], ctx: StructContext): string =
 proc pack_64(vars: varargs[StructNode], ctx: StructContext): string =
   result = newString(8*ctx.repeat)
   for i in 0..ctx.repeat-1:
-    var value: string
+    var value: array[0..7, char]
     case vars[ctx.offset].kind:
     of StructDouble:
       value = extract_64(vars[ctx.offset].dval, ctx.byteOrder)
