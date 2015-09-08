@@ -9,7 +9,6 @@
 ## This module implements Python struct for Nim
 
 import strutils
-import tables
 import endians
 import macros
 
@@ -51,20 +50,13 @@ type
 const
   VERSION* = "0.1.0"
 
-  TYPE_LENGTHS = {
-    'x': sizeof(char),
-    'b': sizeof(char),
-    'h': sizeof(int16),
-    'H': sizeof(uint16),
-    'i': sizeof(int32),
-    'I': sizeof(uint32),
-    'q': sizeof(int64),
-    'Q': sizeof(uint64),
-    'f': sizeof(float32),
-    'd': sizeof(float64),
-    's': sizeof(char),
-    '?': sizeof(bool)
-  }.toTable
+proc getSize(t: char): int {.noSideEffect, inline.} =
+  case t
+  of 'x', 'b', 's', '?': 1
+  of 'h', 'H': 2
+  of 'i', 'I', 'f': 4
+  of 'q', 'Q', 'd': 8
+  else: 0
 
 proc newStructChar*(c: char): StructNode =
   result.kind = StructChar
@@ -158,9 +150,9 @@ proc calcsize(format: string): int =
       repeat.add($f)
     else:
       if repeat == "":
-        inc(result, TYPE_LENGTHS[f])
+        inc(result, getSize(f))
       else:
-        inc(result, parseInt(repeat) * TYPE_LENGTHS[f])
+        inc(result, parseInt(repeat) * getSize(f))
       repeat = ""
 
 proc parse_prefix(ctx: var StructContext, f: char)  =
@@ -250,31 +242,31 @@ proc unpack_short(vars: var seq[StructNode], ctx: var StructContext, f: char, si
   for i in 0..ctx.repeat-1:
     var value = load_16(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.byteOrder)
     vars.add(newStructInt(value))
-  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS[f])
+  inc(ctx.offset, ctx.repeat * getSize(f))
 
 proc unpack_int(vars: var seq[StructNode], ctx: var StructContext, f: char, signed: bool = false) =
   for i in 0..ctx.repeat-1:
     var value = load_32(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.buffer[ctx.offset+2], ctx.buffer[ctx.offset+3], ctx.byteOrder)
     vars.add(newStructInt(value))
-  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS[f])
+  inc(ctx.offset, ctx.repeat * getSize(f))
 
 proc unpack_quad(vars: var seq[StructNode], ctx: var StructContext, f: char, signed: bool = false) =
   for i in 0..ctx.repeat-1:
     var value = load_64(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
     vars.add(newStructInt(value))
-  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS[f])
+  inc(ctx.offset, ctx.repeat * getSize(f))
 
 proc unpack_float(vars: var seq[StructNode], ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
     var value = load_32f(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.buffer[ctx.offset+2], ctx.buffer[ctx.offset+3], ctx.byteOrder)
     vars.add(newStructFloat(value.float32))
-  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS['f'])
+  inc(ctx.offset, ctx.repeat * getSize('f'))
 
 proc unpack_double(vars: var seq[StructNode], ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
     var value = load_64f(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
     vars.add(newStructFloat(value))
-  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS['d'])
+  inc(ctx.offset, ctx.repeat * getSize('d'))
 
 proc unpack_string(vars: var seq[StructNode], ctx: var StructContext) =
   var value: string
@@ -337,7 +329,7 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
     of 's':
       unpack_string(result, context)
     of 'x':
-      context.offset += context.repeat * TYPE_LENGTHS[f]
+      context.offset += context.repeat * getSize(f)
     else:
       raise newException(ValueError, "bad char in struct format")
 
