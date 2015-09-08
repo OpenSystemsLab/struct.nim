@@ -74,9 +74,9 @@ proc newStructBool*(b: bool): StructNode =
   result.kind = StructBool
   result.bval  = b
 
-proc newStructInt*(i: BiggestInt): StructNode =
+proc newStructInt*[T: uint|int|int16|uint16|int32|uint32|int64|uint64|BiggestInt](i: T): StructNode =
   result.kind = StructInt
-  result.num  = i
+  result.num  = i.BiggestInt
 
 proc newStructFloat*(d: BiggestFloat): StructNode =
   result.kind = StructFloat
