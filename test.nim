@@ -25,25 +25,21 @@ echo result4
 
 #echo pack("<fi?c", newStructFloat(5.2), newStructInt(8), newStructBool(true), newStructChar('a'))
 var format = "<ffb2?biQdH"
-var st = newStruct(format)
-discard st.add(5.2'f32).add(6.4'f32).add('A').add(true).add(false)
-var out1 =  st.add('a').add(8'i32).add(8589934591).add(10.4'f64).add(32767.int16).pack()
-echo out1
+var out1 = pack(format, 5.2, 6.4, 'A', true, false, 'a', 8, 8589934591, 10.4, 32767)
 echo unpack(format, out1)
 
-assert newStruct("h").add(32767.int16).pack() == "\xff\x7f"
-
-assert newStruct("4s3s").add("Viet").add("Nam").pack() == "VietNam"
-
-assert newStruct("5s6s4s").add("Ho").add("Chi").add("Minh").pack() == "Ho\x00\x00\x00Chi\x00\x00\x00Minh"
-
-assert newStruct("6sxxxxx3s").add("Viet").add("Nam").pack().len == 14
-
+out1 = pack("h", 32767)
+assert out1 == "\xff\x7f"
+out1 = pack("4s3s", "Viet", "Nam")
+assert out1 == "VietNam"
+out1 = pack("5s6s4s", "Ho", "Chi", "Minh")
+assert out1 == "Ho\x00\x00\x00Chi\x00\x00\x00Minh"
+out1 = pack("6sxxxxx3s", "Viet", "Nam")
+assert out1.len== 14
 
 
 # >>> pack('hhi', 1, 2, 3)
-st = newStruct("hhi")
-var output =  st.add(1.int16).add(2.int16).add(3.int32).pack()
+var output =  pack("hhi", 1, 2, 3)
 
 # alternative way to pack
 # output = pack("hhi", newStructShort(1), newStructShort(1), newStructInt(3))

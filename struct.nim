@@ -11,6 +11,7 @@
 import strutils
 import tables
 import endians
+import macros
 
 type
   StructError* = object of OSError
@@ -18,56 +19,37 @@ type
   StructKind* = enum ## possible JSON node types
     StructChar,
     StructBool,
-    StructShort,
-    StructUShort
     StructInt,
-    StructUInt,
-    StructQuad,
-    StructUQuad,
     StructFloat,
-    StructDouble,
     StructString
 
-  StructNode* = ref StructNodeObj
-  StructNodeObj = object
+  StructNode* = object
     case kind*: StructKind
     of StructChar:
-      chr: char
+      ch: char
     of StructBool:
       bval: bool
-    of StructShort:
-      sval: int16
-    of StructUShort:
-      usval: uint16
     of StructInt:
-      ival: int32
-    of StructUInt:
-      uival: uint32
-    of StructQuad:
-      qval: int64
-    of StructUQuad:
-      uqval: uint64
+      num: BiggestInt
     of StructFloat:
-      fval: float32
-    of StructDouble:
-      dval: float64
+      fval: BiggestFloat
     of StructString:
       str: string
 
-  Struct* = ref StructObj
-  StructObj = object
+  Struct* = object
     fmt: string
     vars: seq[StructNode]
 
-  StructContext = ref object of RootObj
+  StructContext = object
     byteOrder: Endianness
     buffer: string
     offset: int
     repeat: int
+    index: int
 
 
 const
-  VERSION* = "0.0.2"
+  VERSION* = "0.1.0"
 
   TYPE_LENGTHS = {
     'x': sizeof(char),
@@ -85,132 +67,84 @@ const
   }.toTable
 
 proc newStructChar*(c: char): StructNode =
-  new(result)
   result.kind = StructChar
-  result.chr  = c
+  result.ch  = c
 
 proc newStructBool*(b: bool): StructNode =
-  new(result)
   result.kind = StructBool
   result.bval  = b
 
-proc newStructShort*(i: int16): StructNode =
-  new(result)
-  result.kind = StructShort
-  result.sval  = i
-
-proc newStructUShort*(i: uint16): StructNode =
-  new(result)
-  result.kind = StructUShort
-  result.usval  = i
-
-proc newStructInt*(i: int32): StructNode =
-  new(result)
+proc newStructInt*(i: BiggestInt): StructNode =
   result.kind = StructInt
-  result.ival  = i
+  result.num  = i
 
-proc newStructUInt*(i: uint32): StructNode =
-  new(result)
-  result.kind = StructUInt
-  result.uival  = i
-
-proc newStructQuad*(i: int64): StructNode =
-  new(result)
-  result.kind = StructQuad
-  result.qval  = i
-
-proc newStructUQuad*(i: uint64): StructNode =
-  new(result)
-  result.kind = StructUQuad
-  result.uqval  = i
-
-proc newStructFloat*(f: float32): StructNode =
-  new(result)
+proc newStructFloat*(d: BiggestFloat): StructNode =
   result.kind = StructFloat
-  result.fval  = f
-
-proc newStructDouble*(d: float64): StructNode =
-  new(result)
-  result.kind = StructDouble
-  result.dval  = d
+  result.fval  = d
 
 proc newStructString*(s: string): StructNode =
-  new(result)
   result.kind = StructString
   result.str  = s
 
-
 proc newStructContext(): StructContext =
-  new(result)
   result.byteOrder = system.cpuEndian
   result.offset = 0
   result.repeat = 1
+  result.index = 0
 
 proc `$`*( node: StructNode ): string =
   ## Delegate stringification of `TNetstringNode` to its underlying object.
   return case node.kind:
   of StructChar:
-    $node.chr
+    $node.ch
   of StructBool:
     $node.bval
-  of StructShort:
-    $node.sval
-  of StructUShort:
-    $node.usval
   of StructInt:
-    $node.ival
-  of StructUInt:
-    $node.uival
-  of StructQuad:
-    $node.qval
-  of StructUQuad:
-    $node.uqval
+    $node.num
   of StructFloat:
     $node.fval
-  of StructDouble:
-    $node.dval
   of StructString:
     $node.str
 
 proc getChar*(node: StructNode): char {.noSideEffect, procVar.} =
   assert node.kind == StructChar
-  result = node.chr
+  result = node.ch
 
 proc getBool*(node: StructNode): bool {.noSideEffect, procVar.} =
   assert node.kind == StructBool
   result = node.bval
 
 proc getShort*(node: StructNode): int16 {.noSideEffect, procVar.} =
-  assert node.kind == StructShort
-  result = node.sval
+  assert node.kind == StructInt
+  result = node.num.int16
 
 proc getUShort*(node: StructNode): uint16 {.noSideEffect, procVar.} =
-  assert node.kind == StructUShort
-  result = node.usval
+  assert node.kind == StructInt
+  result = node.num.uint16
 
 proc getInt*(node: StructNode): int32 {.noSideEffect, procVar.} =
   assert node.kind == StructInt
-  result = node.ival
+  result = node.num.int32
 
 proc getUInt*(node: StructNode): uint32 {.noSideEffect, procVar.} =
-  assert node.kind == StructUInt
-  result = node.uival
+  assert node.kind == StructInt
+  result = node.num.uint16
 
 proc getQuad*(node: StructNode): int64 {.noSideEffect, procVar.} =
-  assert node.kind == StructQuad
-  result = node.qval
+  assert node.kind == StructInt
+  result = node.num.int64
 
 proc getUQuad*(node: StructNode): uint64 {.noSideEffect, procVar.} =
-  assert node.kind == StructUQuad
-  result = node.uqval
+  assert node.kind == StructInt
+  result = node.num.uint64
 
 proc getFloat*(node: StructNode): float32 {.noSideEffect, procVar.} =
   assert node.kind == StructFloat
-  result = node.fval
+  result = node.fval.float32
 
 proc getDouble*(node: StructNode): float64 {.noSideEffect, procVar.} =
-  assert node.kind == StructDouble
-  result = node.dval
+  assert node.kind == StructFloat
+  result = node.fval.float64
 
 proc getString*(node: StructNode): string {.noSideEffect, procVar.} =
   assert node.kind == StructString
@@ -224,12 +158,12 @@ proc calcsize(format: string): int =
       repeat.add($f)
     else:
       if repeat == "":
-        result += TYPE_LENGTHS[f]
+        inc(result, TYPE_LENGTHS[f])
       else:
-        result += parseInt(repeat) * TYPE_LENGTHS[f]
+        inc(result, parseInt(repeat) * TYPE_LENGTHS[f])
       repeat = ""
 
-proc parse_prefix(ctx: StructContext, f: char)  =
+proc parse_prefix(ctx: var StructContext, f: char)  =
   case f
   of '=':
     ctx.byteOrder = system.cpuEndian
@@ -288,7 +222,7 @@ proc extract_16*[T:int16|uint16](v: T, endian: Endianness): array[0..1, char] {.
   else:
     bigEndian16(addr result, addr v)
 
-proc extract_32*[T:float32|int32|uint32](v: T, endian: Endianness): array[0..3, char] {.inline.} =      
+proc extract_32*[T:float32|int32|uint32](v: T, endian: Endianness): array[0..3, char] {.inline.} =
   var v = v
   if endian == littleEndian:
     littleEndian32(addr result, addr v)
@@ -302,58 +236,47 @@ proc extract_64*[T:float64|int64|uint64](v: T, endian: Endianness): array[0..7, 
   else:
     bigEndian64(addr result, addr v)
 
-proc unpack_char(vars: var seq[StructNode], ctx: StructContext) =
+proc unpack_char(vars: var seq[StructNode], ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
     vars.add(newStructChar(ctx.buffer[ctx.offset]))
-    ctx.offset += 1
+    inc(ctx.offset)
 
-proc unpack_bool(vars: var seq[StructNode], ctx: StructContext) =
+proc unpack_bool(vars: var seq[StructNode], ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
     vars.add(newStructBool(ctx.buffer[ctx.offset].bool))
-    ctx.offset += 1
+    inc(ctx.offset)
 
-proc unpack_short(vars: var seq[StructNode], ctx: StructContext, f: char, signed: bool = false) =
+proc unpack_short(vars: var seq[StructNode], ctx: var StructContext, f: char, signed: bool = false) =
   for i in 0..ctx.repeat-1:
     var value = load_16(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.byteOrder)
-    if not signed:
-      vars.add(newStructShort(value))
-    else:
-      vars.add(newStructUShort(value.uint16))
-    ctx.offset += TYPE_LENGTHS[f]
+    vars.add(newStructInt(value))
+  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS[f])
 
-proc unpack_int(vars: var seq[StructNode], ctx: StructContext, f: char, signed: bool = false) =
+proc unpack_int(vars: var seq[StructNode], ctx: var StructContext, f: char, signed: bool = false) =
   for i in 0..ctx.repeat-1:
     var value = load_32(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.buffer[ctx.offset+2], ctx.buffer[ctx.offset+3], ctx.byteOrder)
-    if not signed:
-      vars.add(newStructInt(value))
-    else:
-      vars.add(newStructUInt(value.uint32))
-    ctx.offset += TYPE_LENGTHS[f]
+    vars.add(newStructInt(value))
+  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS[f])
 
-proc unpack_quad(vars: var seq[StructNode], ctx: StructContext, f: char, signed: bool = false) =
+proc unpack_quad(vars: var seq[StructNode], ctx: var StructContext, f: char, signed: bool = false) =
   for i in 0..ctx.repeat-1:
     var value = load_64(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
-    if not signed:
-      vars.add(newStructQuad(value))
-    else:
-      vars.add(newStructUQuad(value.uint64))
-    ctx.offset += TYPE_LENGTHS[f]
+    vars.add(newStructInt(value))
+  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS[f])
 
-proc unpack_float(vars: var seq[StructNode], ctx: StructContext) =
+proc unpack_float(vars: var seq[StructNode], ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
     var value = load_32f(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.buffer[ctx.offset+2], ctx.buffer[ctx.offset+3], ctx.byteOrder)
-
     vars.add(newStructFloat(value.float32))
-    ctx.offset += TYPE_LENGTHS['f']
+  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS['f'])
 
-proc unpack_double(vars: var seq[StructNode], ctx: StructContext) =
+proc unpack_double(vars: var seq[StructNode], ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
     var value = load_64f(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
+    vars.add(newStructFloat(value))
+  inc(ctx.offset, ctx.repeat * TYPE_LENGTHS['d'])
 
-    vars.add(newStructDouble(value))
-    ctx.offset += TYPE_LENGTHS['d']
-
-proc unpack_string(vars: var seq[StructNode], ctx: StructContext) =
+proc unpack_string(vars: var seq[StructNode], ctx: var StructContext) =
   var value: string
   if ctx.repeat == 1:
     value = $ctx.buffer[ctx.offset]
@@ -418,98 +341,101 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
     else:
       raise newException(ValueError, "bad char in struct format")
 
-proc pack_char(vars: varargs[StructNode], ctx: StructContext): string =
-  result = newString(ctx.repeat)
+proc pack_char(result: var string, vars: openarray[StructNode], ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
     assert vars[ctx.offset].kind == StructChar
-    result[i] = vars[ctx.offset].chr
-    ctx.offset += 1
+    result[ctx.index + i] = vars[ctx.offset].ch
+    inc(ctx.offset)
+  inc(ctx.index, ctx.repeat)
 
-proc pack_bool(vars: varargs[StructNode], ctx: StructContext): string =
-  result = newString(ctx.repeat)
+proc pack_bool(result: var string, vars: openarray[StructNode], ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
     assert vars[ctx.offset].kind == StructBool
     if vars[ctx.offset].bval == true:
-      result[0] = '\x01'
+      result[ctx.index] = '\x01'
     else:
-      result[0] = '\x00'
-    ctx.offset += 1
+      result[ctx.index] = '\x00'
+    inc(ctx.offset)
 
-proc pack_16(vars: varargs[StructNode], ctx: StructContext): string =
-  result = newString(2*ctx.repeat)
+  inc(ctx.index, ctx.repeat)
+
+proc pack_16(result: var string, vars: openarray[StructNode], ctx: var StructContext, signed: bool) =
   for i in 0..ctx.repeat-1:
-    case vars[ctx.offset].kind:
-    of StructShort:
-      let value = extract_16(vars[ctx.offset].sval, ctx.byteOrder)
-      result[i] = value[0]
-      result[i+1] = value[1]
-    of StructUShort:
-      let value = extract_16(vars[ctx.offset].usval, ctx.byteOrder)
-      result[i] = value[0]
-      result[i+1] = value[1]
-    else:
-      raise newException(ValueError, "not supported")
-    ctx.offset += 1
+    let value =
+      if signed:
+        extract_16(vars[ctx.offset].num.int16, ctx.byteOrder)
+      else:
+        extract_16(vars[ctx.offset].num.uint16, ctx.byteOrder)
 
+    result[ctx.index + i] = value[0]
+    result[ctx.index + i + 1] = value[1]
 
-proc pack_32(vars: varargs[StructNode], ctx: StructContext): string =
-  result = newString(4*ctx.repeat)
+    inc(ctx.offset)
+  inc(ctx.index, 2 * ctx.repeat)
+
+proc pack_32(result: var string, vars: openarray[StructNode], ctx: var StructContext, signed: bool) =
   for i in 0..ctx.repeat-1:
     var value: array[0..3, char]
     case vars[ctx.offset].kind:
     of StructFloat:
-      value = extract_32(vars[ctx.offset].fval, ctx.byteOrder)
+      value = extract_32(vars[ctx.offset].fval.float32, ctx.byteOrder)
     of StructInt:
-      value = extract_32(vars[ctx.offset].ival, ctx.byteOrder)
-    of StructUInt:
-      value = extract_32(vars[ctx.offset].uival, ctx.byteOrder)
+      if signed:
+        value = extract_32(vars[ctx.offset].num.int32, ctx.byteOrder)
+      else:
+        value = extract_32(vars[ctx.offset].num.uint32, ctx.byteOrder)
     else:
       raise newException(ValueError, "not supported")
 
     for j in 0..3:
-      result[i+j] = value[j]
+      result[ctx.index + i + j] = value[j]
 
-    ctx.offset += 1
+    inc(ctx.offset)
+  inc(ctx.index, 4 * ctx.repeat)
 
-proc pack_64(vars: varargs[StructNode], ctx: StructContext): string =
-  result = newString(8*ctx.repeat)
+proc pack_64(result: var string, vars: openarray[StructNode], ctx: var StructContext, signed: bool) =
+
   for i in 0..ctx.repeat-1:
     var value: array[0..7, char]
     case vars[ctx.offset].kind:
-    of StructDouble:
-      value = extract_64(vars[ctx.offset].dval, ctx.byteOrder)
-    of StructQuad:
-      value = extract_64(vars[ctx.offset].qval, ctx.byteOrder)
-    of StructUQuad:
-      value= extract_64(vars[ctx.offset].uqval, ctx.byteOrder)
+    of StructFloat:
+      value = extract_64(vars[ctx.offset].fval, ctx.byteOrder)
+    of StructInt:
+      if signed:
+        value = extract_64(vars[ctx.offset].num.int64, ctx.byteOrder)
+      else:
+        value= extract_64(vars[ctx.offset].num.uint64, ctx.byteOrder)
     else:
       raise newException(ValueError, "not supported")
 
     for j in 0..7:
-      result[i+j] = value[j]
+      result[ctx.index + i + j] = value[j]
 
-    ctx.offset += 1
+    inc(ctx.offset)
+  inc(ctx.index, 8 * ctx.repeat)
 
-proc pack_string(vars: varargs[StructNode], ctx: StructContext): string =
-  result = newString(ctx.repeat)
+proc pack_string(result: var string, vars: openarray[StructNode], ctx: var StructContext) =
   assert vars[ctx.offset].kind == StructString
 
   let value = vars[ctx.offset].str
   for i in 0..value.len-1:
-    result[i] = value[i]
+    result[ctx.index + i] = value[i]
   if(value.len < ctx.repeat):
     for i in value.len..ctx.repeat-1:
-      result[i] = '\x00'
+      result[ctx.index + i] = '\x00'
 
-  ctx.offset += 1
+  inc(ctx.offset)
 
-proc pack_pad(ctx: StructContext): string =
-  result = newString(ctx.repeat)
+  inc(ctx.index, ctx.repeat)
+
+proc pack_pad(result: var string, ctx: var StructContext) =
   for i in 0..ctx.repeat-1:
-    result[i] = '\x00'
+    result[ctx.index + i] = '\x00'
+
+  inc(ctx.index, ctx.repeat)
 
 proc pack*(fmt: string, vars: varargs[StructNode]): string =
-  result = ""
+  result = newString(calcsize(fmt))
   var context = newStructContext()
   var repeat = ""
   for i in 0..fmt.len-1:
@@ -529,71 +455,67 @@ proc pack*(fmt: string, vars: varargs[StructNode]): string =
     of '=', '<', '>', '!', '@':
       context.parse_prefix(f)
     of 'b':
-      result &= pack_char(vars, context)
+      pack_char(result, vars, context)
     of '?':
-      result &= pack_bool(vars, context)
-    of  'h', 'H':
-      result &= pack_16(vars, context)
-    of 'i', 'I', 'f':
-      result &= pack_32(vars, context)
-    of  'q', 'Q', 'd':
-      result &= pack_64(vars, context)
+      pack_bool(result, vars, context)
+    of 'h':
+      pack_16(result, vars, context, true)
+    of 'H':
+      pack_16(result, vars, context, false)
+    of 'i':
+      pack_32(result, vars, context, true)
+    of 'I':
+      pack_32(result, vars, context, false)
+    of 'f':
+      pack_32(result, vars, context, false)
+    of  'q':
+      pack_64(result, vars, context, true)
+    of  'Q':
+      pack_64(result, vars, context, false)
+    of 'd':
+      pack_64(result, vars, context, false)
     of 's':
-      result &= pack_string(vars, context)
+      pack_string(result, vars, context)
     of 'x':
-      result &= pack_pad(context)
+      pack_pad(result, context)
     else:
       raise newException(ValueError, "bad char in struct format")
 
-
 proc newStruct*(fmt: string): Struct =
-  new(result)
   result.fmt = fmt
   result.vars = @[]
 
-proc add*(s: Struct, c: char): Struct =
-  result = s
+proc add*(s: var Struct, c: char) =
   s.vars.add(newStructChar(c))
 
-proc add*(s: Struct, b: bool): Struct =
-  result = s
+proc add*(s: var Struct, b: bool) =
   s.vars.add(newStructBool(b))
 
-proc add*(s: Struct, i: int16): Struct =
-  result = s
-  s.vars.add(newStructShort(i))
+proc add*[T: uint|int|int16|uint16|int32|uint32|int64|uint64|BiggestInt](s: var Struct, d: T) =
+  s.vars.add(newStructInt(d))
 
-proc add*(s: Struct, i: uint16): Struct =
-  result = s
-  s.vars.add(newStructUShort(i))
+proc add*(s: var Struct, d: float) =
+  s.vars.add(newStructFloat(d))
 
-proc add*(s: Struct, i: int32): Struct =
-  result = s
-  s.vars.add(newStructInt(i))
-
-proc add*(s: Struct, i: uint32): Struct =
-  result = s
-  s.vars.add(newStructUint(i))
-
-proc add*(s: Struct, i: int64): Struct =
-  result = s
-  s.vars.add(newStructQuad(i))
-
-proc add*(s: Struct, i: uint64): Struct =
-  result = s
-  s.vars.add(newStructUQuad(i))
-
-proc add*(s: Struct, f: float32): Struct =
-  result = s
-  s.vars.add(newStructFloat(f))
-
-proc add*(s: Struct, d: float64): Struct =
-  result = s
-  s.vars.add(newStructDouble(d))
-
-proc add*(s: Struct, str: string): Struct =
-  result = s
+proc add*(s: var Struct, str: string) =
   s.vars.add(newStructString(str))
 
 proc pack*(s: Struct): string =
   result = pack(s.fmt, s.vars)
+
+macro pack_m(n: openarray[expr]): stmt =
+  result = newNimNode(nnkStmtList, n)
+  result.add(newVarStmt(ident("s"), newCall("newStruct", n[0])))
+  if n.len > 1:
+    for i in 1..n.len-1:
+      result.add(newCall(ident("add"), ident("s"), n[i]))
+
+template pack*(n: varargs[expr]): expr =
+  block p:
+    pack_m(n)
+    pack(s.fmt, s.vars)
+
+
+when isMainModule:
+  var x = pack("3b", 'a', 'b', 'c')
+  echo x
