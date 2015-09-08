@@ -48,7 +48,7 @@ type
 
 
 const
-  VERSION* = "0.1.0"
+  VERSION* = "0.1.1"
 
 proc getSize(t: char): int {.noSideEffect, inline.} =
   case t
@@ -141,7 +141,7 @@ proc calcsize(format: string): int =
         inc(result, getSize(f))
       else:
         inc(result, parseInt(repeat) * getSize(f))
-      repeat = ""
+      repeat = newString(0)
 
 proc parse_prefix(ctx: var StructContext, f: char)  =
   case f
@@ -277,7 +277,7 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
   var context = newStructContext()
   context.buffer = buf
 
-  var repeat = ""
+  var repeat = newString(0)
   for i in 0..fmt.len-1:
     let f: char = fmt[i]
 
@@ -289,7 +289,7 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
         context.repeat = 1
       else:
         context.repeat = parseInt(repeat)
-        repeat = ""
+        repeat = newString(0)
 
     case f
     of '=', '<', '>', '!', '@':
@@ -417,7 +417,7 @@ proc pack_pad(result: var string, ctx: var StructContext) =
 proc pack*(fmt: string, vars: varargs[StructNode]): string =
   result = newString(calcsize(fmt))
   var context = newStructContext()
-  var repeat = ""
+  var repeat = newString(0)
   for i in 0..fmt.len-1:
     let f: char = fmt[i]
 
@@ -429,7 +429,7 @@ proc pack*(fmt: string, vars: varargs[StructNode]): string =
         context.repeat = 1
       else:
         context.repeat = parseInt(repeat)
-        repeat = ""
+        repeat = newString(0)
 
     case f
     of '=', '<', '>', '!', '@':
@@ -444,15 +444,11 @@ proc pack*(fmt: string, vars: varargs[StructNode]): string =
       pack_16(result, vars, context, false)
     of 'i':
       pack_32(result, vars, context, true)
-    of 'I':
-      pack_32(result, vars, context, false)
-    of 'f':
+    of 'I', 'f':
       pack_32(result, vars, context, false)
     of  'q':
       pack_64(result, vars, context, true)
-    of  'Q':
-      pack_64(result, vars, context, false)
-    of 'd':
+    of  'Q', 'd':
       pack_64(result, vars, context, false)
     of 's':
       pack_string(result, vars, context)
@@ -461,39 +457,37 @@ proc pack*(fmt: string, vars: varargs[StructNode]): string =
     else:
       raise newException(ValueError, "bad char in struct format")
 
-proc newStruct*(fmt: string): Struct =
-  result.fmt = fmt
-  result.vars = @[]
+proc initStruct*(s: var Struct, fmt: string) {.inline.} =
+  s.fmt = fmt
+  s.vars = @[]
 
-proc add*(s: var Struct, c: char) =
+proc add*(s: var Struct, c: char) {.inline.} =
   s.vars.add(newStructChar(c))
 
-proc add*(s: var Struct, b: bool) =
+proc add*(s: var Struct, b: bool) {.inline.} =
   s.vars.add(newStructBool(b))
 
-proc add*[T: uint|int|int16|uint16|int32|uint32|int64|uint64|BiggestInt](s: var Struct, d: T) =
+proc add*[T: uint|int|int16|uint16|int32|uint32|int64|uint64|BiggestInt](s: var Struct, d: T) {.inline.} =
   s.vars.add(newStructInt(d))
 
-proc add*(s: var Struct, d: float) =
+proc add*(s: var Struct, d: float) {.inline.} =
   s.vars.add(newStructFloat(d))
 
-proc add*(s: var Struct, str: string) =
+proc add*(s: var Struct, str: string) {.inline.} =
   s.vars.add(newStructString(str))
-
-proc pack*(s: Struct): string =
-  result = pack(s.fmt, s.vars)
 
 macro pack_m(n: openarray[expr]): stmt =
   result = newNimNode(nnkStmtList, n)
-  result.add(newVarStmt(ident("s"), newCall("newStruct", n[0])))
+  result.add(newCall("initStruct", ident("s"), n[0]))
   if n.len > 1:
     for i in 1..n.len-1:
       result.add(newCall(ident("add"), ident("s"), n[i]))
 
-template pack*(n: varargs[expr]): expr =
-  block p:
-    pack_m(n)
-    pack(s.fmt, s.vars)
+template `pack`*(n: varargs[expr]): expr =
+  when not declaredInScope(s):
+    var s {.inject.}: Struct
+  pack_m(n)
+  pack(s.fmt, s.vars)
 
 
 when isMainModule:
