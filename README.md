@@ -45,7 +45,7 @@ Format Characters:
 Usage
 ======
 
-````
+````nim
 # >>> from struct import *
 import struct
 
