@@ -85,7 +85,6 @@ proc newStructContext(): StructContext =
   result.index = 0
 
 proc `$`*( node: StructNode ): string =
-  ## Delegate stringification of `TNetstringNode` to its underlying object.
   return case node.kind:
   of StructChar:
     $node.ch
@@ -98,49 +97,38 @@ proc `$`*( node: StructNode ): string =
   of StructString:
     $node.str
 
-proc getChar*(node: StructNode): char {.noSideEffect, procVar.} =
-  assert node.kind == StructChar
-  result = node.ch
+proc getChar*(node: StructNode): char {.noSideEffect, inline.} =
+  node.ch
 
-proc getBool*(node: StructNode): bool {.noSideEffect, procVar.} =
-  assert node.kind == StructBool
-  result = node.bval
+proc getBool*(node: StructNode): bool {.noSideEffect, inline.} =
+  node.bval
 
-proc getShort*(node: StructNode): int16 {.noSideEffect, procVar.} =
-  assert node.kind == StructInt
-  result = node.num.int16
+proc getShort*(node: StructNode): int16 {.noSideEffect, inline.} =
+  node.num.int16
 
-proc getUShort*(node: StructNode): uint16 {.noSideEffect, procVar.} =
-  assert node.kind == StructInt
-  result = node.num.uint16
+proc getUShort*(node: StructNode): uint16 {.noSideEffect, inline.} =
+  node.num.uint16
 
-proc getInt*(node: StructNode): int32 {.noSideEffect, procVar.} =
-  assert node.kind == StructInt
-  result = node.num.int32
+proc getInt*(node: StructNode): int32 {.noSideEffect, inline.} =
+  node.num.int32
 
-proc getUInt*(node: StructNode): uint32 {.noSideEffect, procVar.} =
-  assert node.kind == StructInt
-  result = node.num.uint16
+proc getUInt*(node: StructNode): uint32 {.noSideEffect, inline.} =
+  node.num.uint16
 
-proc getQuad*(node: StructNode): int64 {.noSideEffect, procVar.} =
-  assert node.kind == StructInt
-  result = node.num.int64
+proc getQuad*(node: StructNode): int64 {.noSideEffect, inline.} =
+  node.num.int64
 
-proc getUQuad*(node: StructNode): uint64 {.noSideEffect, procVar.} =
-  assert node.kind == StructInt
-  result = node.num.uint64
+proc getUQuad*(node: StructNode): uint64 {.noSideEffect, inline.} =
+  node.num.uint64
 
-proc getFloat*(node: StructNode): float32 {.noSideEffect, procVar.} =
-  assert node.kind == StructFloat
-  result = node.fval.float32
+proc getFloat*(node: StructNode): float32 {.noSideEffect, inline.} =
+  node.fval.float32
 
-proc getDouble*(node: StructNode): float64 {.noSideEffect, procVar.} =
-  assert node.kind == StructFloat
-  result = node.fval.float64
+proc getDouble*(node: StructNode): float64 {.noSideEffect, inline.} =
+  node.fval.float64
 
-proc getString*(node: StructNode): string {.noSideEffect, procVar.} =
-  assert node.kind == StructString
-  return node.str
+proc getString*(node: StructNode): string {.noSideEffect, inline.} =
+  node.str
 
 proc calcsize(format: string): int =
   var repeat = newString(0)
@@ -275,7 +263,7 @@ proc unpack_string(vars: var seq[StructNode], ctx: var StructContext) =
   else:
     value = ctx.buffer[ctx.offset..ctx.offset+ctx.repeat-1]
   vars.add(newStructString(value))
-  ctx.offset += ctx.repeat
+  inc(ctx.offset, ctx.repeat)
 
 
 
@@ -329,7 +317,7 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
     of 's':
       unpack_string(result, context)
     of 'x':
-      context.offset += context.repeat * getSize(f)
+      inc(context.offset, context.repeat * getSize(f))
     else:
       raise newException(ValueError, "bad char in struct format")
 
