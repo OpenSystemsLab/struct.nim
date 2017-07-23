@@ -113,7 +113,7 @@ proc getInt*(node: StructNode): int32 {.noSideEffect, inline.} =
   node.num.int32
 
 proc getUInt*(node: StructNode): uint32 {.noSideEffect, inline.} =
-  node.num.uint16
+  node.num.uint32
 
 proc getQuad*(node: StructNode): int64 {.noSideEffect, inline.} =
   node.num.int64
