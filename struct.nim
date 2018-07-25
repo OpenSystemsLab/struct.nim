@@ -476,14 +476,14 @@ proc add*(s: var Struct, d: float) {.inline.} =
 proc add*(s: var Struct, str: string) {.inline.} =
   s.vars.add(newStructString(str))
 
-macro pack_m(n: openarray[expr]): stmt =
+macro pack_m(n: openarray[typed]): untyped =
   result = newNimNode(nnkStmtList, n)
   result.add(newCall("initStruct", ident("s"), n[0]))
   if n.len > 1:
     for i in 1..n.len-1:
       result.add(newCall(ident("add"), ident("s"), n[i]))
 
-template `pack`*(n: varargs[expr]): expr =
+template `pack`*(n: varargs[typed]): untyped =
   when not declaredInScope(s):
     var s {.inject.}: Struct
   pack_m(n)
