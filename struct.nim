@@ -58,25 +58,16 @@ proc getSize(t: char): int {.noSideEffect, inline.} =
   of 'q', 'Q', 'd': 8
   else: 0
 
-proc newStructChar*(c: char): StructNode =
-  result.kind = StructChar
-  result.ch  = c
+proc newStructChar*(c: char): StructNode = StructNode(kind: StructChar, ch: c)
 
-proc newStructBool*(b: bool): StructNode =
-  result.kind = StructBool
-  result.bval  = b
+proc newStructBool*(b: bool): StructNode = StructNode(kind: StructBool, bval: b)
 
-proc newStructInt*[T: uint|int|int16|uint16|int32|uint32|int64|uint64|BiggestInt](i: T): StructNode =
-  result.kind = StructInt
-  result.num  = i.BiggestInt
+proc newStructInt*[T: uint|int|int16|uint16|int32|uint32|int64|uint64|BiggestInt](i: T): StructNode = 
+  result = StructNode(kind: StructInt, num: i.BiggestInt)
 
-proc newStructFloat*(d: BiggestFloat): StructNode =
-  result.kind = StructFloat
-  result.fval  = d
+proc newStructFloat*(d: BiggestFloat): StructNode = StructNode(kind: StructFloat, fval: d)
 
-proc newStructString*(s: string): StructNode =
-  result.kind = StructString
-  result.str  = s
+proc newStructString*(s: string): StructNode = StructNode(kind: StructString, str: s)
 
 proc newStructContext(): StructContext =
   result.byteOrder = system.cpuEndian
