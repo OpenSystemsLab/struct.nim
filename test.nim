@@ -1,5 +1,5 @@
 # >>> from struct import *
-import struct
+import struct, strutils
 
 let buf ="\x41\x42\x43\x44\x45\x01\x00\x07\x08\x01\x02\x03\x04\x0D\x00\x00\x00"
 let result1 = unpack("<5b2?h2i", buf)
@@ -35,7 +35,7 @@ assert out1 == "VietNam"
 out1 = pack("5s6s4s", "Ho", "Chi", "Minh")
 assert out1 == "Ho\x00\x00\x00Chi\x00\x00\x00Minh"
 out1 = pack("6sxxxxx3s", "Viet", "Nam")
-assert out1.len== 14
+assert out1.len == 14
 
 
 # >>> pack('hhi', 1, 2, 3)
@@ -49,3 +49,9 @@ var result = unpack("hhi", output);
 echo result[0].getShort
 echo result[1].getShort
 echo result[2].getInt
+
+assert struct.unpack(">H", parseHexStr("FFFF"))[0].getShort == int16(-1)
+assert struct.unpack(">H", parseHexStr("FFFF"))[0].getUShort == 65535
+
+assert struct.unpack(">I", parseHexStr("FFFFFFFF"))[0].getInt == int32(-1)
+assert struct.unpack(">I", parseHexStr("FFFFFFFF"))[0].getUInt == uint32(4294967295)

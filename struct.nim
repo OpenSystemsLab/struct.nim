@@ -13,6 +13,8 @@ import endians
 import macros
 
 type
+  SomeByte* = byte|char|int8|uint8
+
   StructError* = object of OSError
 
   StructKind* = enum ## possible JSON node types
@@ -62,7 +64,7 @@ proc newStructChar*(c: char): StructNode = StructNode(kind: StructChar, ch: c)
 
 proc newStructBool*(b: bool): StructNode = StructNode(kind: StructBool, bval: b)
 
-proc newStructInt*[T: uint|int|int16|uint16|int32|uint32|int64|uint64|BiggestInt](i: T): StructNode = 
+proc newStructInt*[T: SomeInteger](i: T): StructNode =
   result = StructNode(kind: StructInt, num: i.BiggestInt)
 
 proc newStructFloat*(d: BiggestFloat): StructNode = StructNode(kind: StructFloat, fval: d)
@@ -98,19 +100,19 @@ proc getShort*(node: StructNode): int16 {.noSideEffect, inline.} =
   node.num.int16
 
 proc getUShort*(node: StructNode): uint16 {.noSideEffect, inline.} =
-  node.num.uint16
+  node.num.uint.uint16
 
 proc getInt*(node: StructNode): int32 {.noSideEffect, inline.} =
   node.num.int32
 
 proc getUInt*(node: StructNode): uint32 {.noSideEffect, inline.} =
-  node.num.uint32
+  node.num.uint.uint32
 
 proc getQuad*(node: StructNode): int64 {.noSideEffect, inline.} =
   node.num.int64
 
 proc getUQuad*(node: StructNode): uint64 {.noSideEffect, inline.} =
-  node.num.uint64
+  node.num.uint.uint64
 
 proc getFloat*(node: StructNode): float32 {.noSideEffect, inline.} =
   node.fval.float32
@@ -145,19 +147,19 @@ proc parse_prefix(ctx: var StructContext, f: char)  =
   else:
     ctx.byteOrder = system.cpuEndian
 
-proc load_16*[T:byte|char|int8|uint8](a, b: T, endian: Endianness): int16 {.inline.} =
+proc load_16*[T: SomeByte](a, b: T, endian: Endianness): int16 {.inline.} =
   if endian == littleEndian:
     a.int16 + b.int16 shl 8
   else:
     b.int16 + a.int16 shl 8
 
-proc load_32*[T:byte|char|int8|uint8](a, b, c, d: T, endian: Endianness): int32 {.inline.} =
+proc load_32*[T: SomeByte](a, b, c, d: T, endian: Endianness): int32 {.inline.} =
   if endian == littleEndian:
     a.int32 + b.int32 shl 8 + c.int32 shl 16 + d.int32 shl 24
   else:
     d.int32 + c.int32 shl 8 + b.int32 shl 16 + a.int32 shl 24
 
-proc load_32f*[T:byte|char|int8|uint8](a, b, c, d: T, endian: Endianness): float32 {.inline.} =
+proc load_32f*[T: SomeByte](a, b, c, d: T, endian: Endianness): float32 {.inline.} =
     var o = cast[cstring](addr result)
     if endian == littleEndian:
       o[0] = a
@@ -255,7 +257,6 @@ proc unpack_string(vars: var seq[StructNode], ctx: var StructContext) =
     value = ctx.buffer[ctx.offset..ctx.offset+ctx.repeat-1]
   vars.add(newStructString(value))
   inc(ctx.offset, ctx.repeat)
-
 
 
 proc unpack*(fmt, buf: string): seq[StructNode] =
@@ -458,7 +459,7 @@ proc add*(s: var Struct, c: char) {.inline.} =
 proc add*(s: var Struct, b: bool) {.inline.} =
   s.vars.add(newStructBool(b))
 
-proc add*[T: uint|int|int16|uint16|int32|uint32|int64|uint64|BiggestInt](s: var Struct, d: T) {.inline.} =
+proc add*[T: SomeNumber|BiggestInt](s: var Struct, d: T) {.inline.} =
   s.vars.add(newStructInt(d))
 
 proc add*(s: var Struct, d: float) {.inline.} =
