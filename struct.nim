@@ -123,7 +123,8 @@ proc getDouble*(node: StructNode): float64 {.noSideEffect, inline.} =
 proc getString*(node: StructNode): string {.noSideEffect, inline.} =
   node.str
 
-proc calcsize(format: string): int =
+proc computeLength*(format: string): int =
+  ## Compute the length for string represent `format`
   var repeat = newString(0)
   for i in 0..format.len-1:
     let f: char = format[i]
@@ -262,9 +263,9 @@ proc unpack_string(vars: var seq[StructNode], ctx: var StructContext) =
 proc unpack*(fmt, buf: string): seq[StructNode] =
   result = @[]
 
-  let size = calcsize(fmt)
-  if buf.len < size:
-    raise newException(ValueError, "unpack requires a string argument of length " & $size & ", input: " & $buf.len)
+  let length = computeLength(fmt)
+  if buf.len < length:
+    raise newException(ValueError, "unpack requires a string argument of length " & $length & ", input: " & $buf.len)
 
   var context = newStructContext()
   context.buffer = buf
@@ -407,7 +408,7 @@ proc pack_pad(result: var string, ctx: var StructContext) =
   inc(ctx.index, ctx.repeat)
 
 proc pack*(fmt: string, vars: varargs[StructNode]): string =
-  result = newString(calcsize(fmt))
+  result = newString(computeLength(fmt))
   var context = newStructContext()
   var repeat = newString(0)
   for i in 0..fmt.len-1:
