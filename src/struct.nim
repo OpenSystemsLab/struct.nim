@@ -121,8 +121,8 @@ proc getString*(node: StructNode): string {.noSideEffect, inline.} =
 proc computeLength*(format: string): int =
   ## Compute the length for string represent `format`
   var repeat = newString(0)
-  for i in 0..format.len-1:
-    let f: char = format[i]
+  for i in 0..<format.len:
+    let f = format[i]
     if f in '0'..'9':
       repeat.add($f)
     else:
@@ -169,7 +169,7 @@ proc load_32f*[T: SomeByte](a, b, c, d: T, endian: Endianness): float32 {.inline
       o[0] = d
 
 proc load_64*(s: string, endian: Endianness): int64 {.inline.} =
-  for i in 0..sizeof(int64)-1:
+  for i in 0..<sizeof(int64):
     result  = result shl 8
     if endian == littleEndian:
       result = result or s[8 - i - 1].int64
@@ -178,7 +178,7 @@ proc load_64*(s: string, endian: Endianness): int64 {.inline.} =
 
 proc load_64f*(s: string, endian: Endianness): float64 {.inline.} =
   var o = cast[cstring](addr result)
-  for i in 0..sizeof(float64)-1:
+  for i in 0..<sizeof(float64):
     if endian == littleEndian:
       o[i] = s[i]
     else:
@@ -276,10 +276,10 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
   context.buffer = buf
 
   var repeat = newString(0)
-  for i in 0..fmt.len-1:
+  for i in 0..<fmt.len:
     let f: char = fmt[i]
     if f in '0'..'9':
-      repeat.add($f)
+      repeat.add(f)
       continue
     else:
       if repeat == "":
@@ -352,7 +352,7 @@ proc pack_16(result: var string, vars: openarray[StructNode], ctx: var StructCon
 
 proc pack_32(result: var string, vars: openarray[StructNode], ctx: var StructContext, signed: bool) =
   for i in 0..<ctx.repeat:
-    var value: array[0..3, char]
+    var value: array[4, char]
     case vars[ctx.offset].kind:
     of StructFloat:
       value = extract_32(vars[ctx.offset].fval.float32, ctx.byteOrder)
@@ -363,16 +363,14 @@ proc pack_32(result: var string, vars: openarray[StructNode], ctx: var StructCon
         value = extract_32(vars[ctx.offset].num.uint32, ctx.byteOrder)
     else:
       raise newException(ValueError, "not supported")
-
     for j in 0..3:
-      result[ctx.index + i + j] = value[j]
-
+      result[ctx.index + i * 4 + j] = value[j]
     inc(ctx.offset)
   inc(ctx.index, 4 * ctx.repeat)
 
 proc pack_64(result: var string, vars: openarray[StructNode], ctx: var StructContext, signed: bool) =
   for i in 0..<ctx.repeat:
-    var value: array[0..7, char]
+    var value: array[8, char]
     case vars[ctx.offset].kind:
     of StructFloat:
       value = extract_64(vars[ctx.offset].fval, ctx.byteOrder)
@@ -385,7 +383,7 @@ proc pack_64(result: var string, vars: openarray[StructNode], ctx: var StructCon
       raise newException(ValueError, "not supported")
 
     for j in 0..7:
-      result[ctx.index + i + j] = value[j]
+      result[ctx.index + i * 8 + j] = value[j]
 
     inc(ctx.offset)
   inc(ctx.index, 8 * ctx.repeat)
@@ -394,10 +392,10 @@ proc pack_string(result: var string, vars: openarray[StructNode], ctx: var Struc
   assert vars[ctx.offset].kind == StructString
 
   let value = vars[ctx.offset].str
-  for i in 0..value.len-1:
+  for i in 0..<value.len:
     result[ctx.index + i] = value[i]
   if(value.len < ctx.repeat):
-    for i in value.len..ctx.repeat-1:
+    for i in value.len..<ctx.repeat:
       result[ctx.index + i] = '\x00'
 
   inc(ctx.offset)
@@ -412,11 +410,10 @@ proc pack*(fmt: string, vars: varargs[StructNode]): string =
   result = newString(computeLength(fmt))
   var context = newStructContext()
   var repeat = newString(0)
-  for i in 0..fmt.len-1:
-    let f: char = fmt[i]
-
+  for i in 0..<fmt.len:
+    let f = fmt[i]
     if f in '0'..'9':
-      repeat.add($f)
+      repeat.add(f)
       continue
     else:
       if repeat == "":
@@ -474,7 +471,7 @@ macro pack_m(n: openarray[typed]): untyped =
   result = newNimNode(nnkStmtList, n)
   result.add(newCall("initStruct", ident("s"), n[0]))
   if n.len > 1:
-    for i in 1..n.len-1:
+    for i in 1..<n.len:
       result.add(newCall(ident("add"), ident("s"), n[i]))
 
 template `pack`*(n: varargs[typed]): untyped =
