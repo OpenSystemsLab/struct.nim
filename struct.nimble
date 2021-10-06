@@ -1,10 +1,10 @@
 [Package]
 name          = "struct"
-version       = "0.2.1"
+version       = "0.2.2"
 author        = "Huy Doan"
 description   = "Python-like 'struct' for Nim"
 license       = "MIT"
-
+srcDir        = "src"
 skipFiles     = "test.nim"
 
 [Deps]

@@ -8,16 +8,13 @@
 
 ## This module implements Python struct for Nim
 
-import strutils
-import endians
-import macros
+import strutils, endians, macros
 
 type
   SomeByte* = byte|char|int8|uint8
-
   StructError* = object of OSError
 
-  StructKind* = enum ## possible JSON node types
+  StructKind* = enum
     StructChar,
     StructBool,
     StructInt,
@@ -48,9 +45,8 @@ type
     repeat: int
     index: int
 
-
 const
-  VERSION* = "0.1.1"
+  STRUCT_VERSION* = "0.2.2"
 
 proc getSize(t: char): int {.noSideEffect, inline.} =
   case t
@@ -64,8 +60,7 @@ proc newStructChar*(c: char): StructNode = StructNode(kind: StructChar, ch: c)
 
 proc newStructBool*(b: bool): StructNode = StructNode(kind: StructBool, bval: b)
 
-proc newStructInt*[T: SomeInteger](i: T): StructNode =
-  result = StructNode(kind: StructInt, num: i.BiggestInt)
+proc newStructInt*[T: SomeInteger](i: T): StructNode = StructNode(kind: StructInt, num: i.BiggestInt)
 
 proc newStructFloat*(d: BiggestFloat): StructNode = StructNode(kind: StructFloat, fval: d)
 
@@ -150,15 +145,15 @@ proc parse_prefix(ctx: var StructContext, f: char)  =
 
 proc load_16*[T: SomeByte](a, b: T, endian: Endianness): int16 {.inline.} =
   if endian == littleEndian:
-    a.int16 + b.int16 shl 8
+    a.int16 or b.int16 shl 8
   else:
-    b.int16 + a.int16 shl 8
+    b.int16 or a.int16 shl 8
 
 proc load_32*[T: SomeByte](a, b, c, d: T, endian: Endianness): int32 {.inline.} =
   if endian == littleEndian:
-    a.int32 + b.int32 shl 8 + c.int32 shl 16 + d.int32 shl 24
+    a.int32 or b.int32 shl 8 or c.int32 shl 16 or d.int32 shl 24
   else:
-    d.int32 + c.int32 shl 8 + b.int32 shl 16 + a.int32 shl 24
+    d.int32 or c.int32 shl 8 or b.int32 shl 16 or a.int32 shl 24
 
 proc load_32f*[T: SomeByte](a, b, c, d: T, endian: Endianness): float32 {.inline.} =
     var o = cast[cstring](addr result)
@@ -211,42 +206,52 @@ proc extract_64*[T:float64|int64|uint64](v: T, endian: Endianness): array[0..7, 
     bigEndian64(addr result, addr v)
 
 proc unpack_char(vars: var seq[StructNode], ctx: var StructContext) =
-  for i in 0..ctx.repeat-1:
+  for i in 0..<ctx.repeat:
     vars.add(newStructChar(ctx.buffer[ctx.offset]))
     inc(ctx.offset)
 
 proc unpack_bool(vars: var seq[StructNode], ctx: var StructContext) =
-  for i in 0..ctx.repeat-1:
+  for i in 0..<ctx.repeat:
     vars.add(newStructBool(ctx.buffer[ctx.offset].bool))
     inc(ctx.offset)
 
 proc unpack_short(vars: var seq[StructNode], ctx: var StructContext, f: char, signed: bool = false) =
-  for i in 0..ctx.repeat-1:
-    var value = load_16(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.byteOrder)
+  for i in 0..<ctx.repeat:
+    let
+      offset = ctx.offset + i * 2
+      value = load_16(ctx.buffer[offset], ctx.buffer[offset+1], ctx.byteOrder)
     vars.add(newStructInt(value))
   inc(ctx.offset, ctx.repeat * getSize(f))
 
 proc unpack_int(vars: var seq[StructNode], ctx: var StructContext, f: char, signed: bool = false) =
-  for i in 0..ctx.repeat-1:
-    var value = load_32(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.buffer[ctx.offset+2], ctx.buffer[ctx.offset+3], ctx.byteOrder)
+  for i in 0..<ctx.repeat:
+    let
+      offset = ctx.offset + i * 4
+      value = load_32(ctx.buffer[offset], ctx.buffer[offset+1], ctx.buffer[offset+2], ctx.buffer[offset+3], ctx.byteOrder)
     vars.add(newStructInt(value))
   inc(ctx.offset, ctx.repeat * getSize(f))
 
 proc unpack_quad(vars: var seq[StructNode], ctx: var StructContext, f: char, signed: bool = false) =
-  for i in 0..ctx.repeat-1:
-    var value = load_64(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
+  for i in 0..<ctx.repeat:
+    let
+      offset = ctx.offset + i * 8
+      value = load_64(ctx.buffer[offset..offset+7], ctx.byteOrder)
     vars.add(newStructInt(value))
   inc(ctx.offset, ctx.repeat * getSize(f))
 
 proc unpack_float(vars: var seq[StructNode], ctx: var StructContext) =
-  for i in 0..ctx.repeat-1:
-    var value = load_32f(ctx.buffer[ctx.offset], ctx.buffer[ctx.offset+1], ctx.buffer[ctx.offset+2], ctx.buffer[ctx.offset+3], ctx.byteOrder)
+  for i in 0..<ctx.repeat:
+    let
+      offset = ctx.offset + i * 4
+      value = load_32f(ctx.buffer[offset], ctx.buffer[offset+1], ctx.buffer[offset+2], ctx.buffer[offset+3], ctx.byteOrder)
     vars.add(newStructFloat(value.float32))
   inc(ctx.offset, ctx.repeat * getSize('f'))
 
 proc unpack_double(vars: var seq[StructNode], ctx: var StructContext) =
-  for i in 0..ctx.repeat-1:
-    var value = load_64f(ctx.buffer[ctx.offset..ctx.offset+7], ctx.byteOrder)
+  for i in 0..<ctx.repeat:
+    let
+      offset = ctx.offset + i * 8
+      value = load_64f(ctx.buffer[offset..offset+7], ctx.byteOrder)
     vars.add(newStructFloat(value))
   inc(ctx.offset, ctx.repeat * getSize('d'))
 
@@ -273,7 +278,6 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
   var repeat = newString(0)
   for i in 0..fmt.len-1:
     let f: char = fmt[i]
-
     if f in '0'..'9':
       repeat.add($f)
       continue
@@ -315,14 +319,14 @@ proc unpack*(fmt, buf: string): seq[StructNode] =
       raise newException(ValueError, "bad char in struct format")
 
 proc pack_char(result: var string, vars: openarray[StructNode], ctx: var StructContext) =
-  for i in 0..ctx.repeat-1:
+  for i in 0..<ctx.repeat:
     assert vars[ctx.offset].kind == StructChar
     result[ctx.index + i] = vars[ctx.offset].ch
     inc(ctx.offset)
   inc(ctx.index, ctx.repeat)
 
 proc pack_bool(result: var string, vars: openarray[StructNode], ctx: var StructContext) =
-  for i in 0..ctx.repeat-1:
+  for i in 0..<ctx.repeat:
     assert vars[ctx.offset].kind == StructBool
     if vars[ctx.offset].bval == true:
       result[ctx.index] = '\x01'
@@ -333,7 +337,7 @@ proc pack_bool(result: var string, vars: openarray[StructNode], ctx: var StructC
   inc(ctx.index, ctx.repeat)
 
 proc pack_16(result: var string, vars: openarray[StructNode], ctx: var StructContext, signed: bool) =
-  for i in 0..ctx.repeat-1:
+  for i in 0..<ctx.repeat:
     let value =
       if signed:
         extract_16(vars[ctx.offset].num.int16, ctx.byteOrder)
@@ -347,7 +351,7 @@ proc pack_16(result: var string, vars: openarray[StructNode], ctx: var StructCon
   inc(ctx.index, 2 * ctx.repeat)
 
 proc pack_32(result: var string, vars: openarray[StructNode], ctx: var StructContext, signed: bool) =
-  for i in 0..ctx.repeat-1:
+  for i in 0..<ctx.repeat:
     var value: array[0..3, char]
     case vars[ctx.offset].kind:
     of StructFloat:
@@ -367,8 +371,7 @@ proc pack_32(result: var string, vars: openarray[StructNode], ctx: var StructCon
   inc(ctx.index, 4 * ctx.repeat)
 
 proc pack_64(result: var string, vars: openarray[StructNode], ctx: var StructContext, signed: bool) =
-
-  for i in 0..ctx.repeat-1:
+  for i in 0..<ctx.repeat:
     var value: array[0..7, char]
     case vars[ctx.offset].kind:
     of StructFloat:
@@ -398,13 +401,11 @@ proc pack_string(result: var string, vars: openarray[StructNode], ctx: var Struc
       result[ctx.index + i] = '\x00'
 
   inc(ctx.offset)
-
   inc(ctx.index, ctx.repeat)
 
 proc pack_pad(result: var string, ctx: var StructContext) =
-  for i in 0..ctx.repeat-1:
+  for i in 0..<ctx.repeat:
     result[ctx.index + i] = '\x00'
-
   inc(ctx.index, ctx.repeat)
 
 proc pack*(fmt: string, vars: varargs[StructNode]): string =
